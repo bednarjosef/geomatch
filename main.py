@@ -25,18 +25,17 @@ class config:
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+# GEMINI CODE
 def save_matches(ids):
     print(f"Streaming dataset to retrieve {len(ids)} images...")
     
-    # Authenticated streaming load
-    ds = load_dataset("josefbednar/prague-streetview-50k", split="train", streaming=True)
+    ds = load_dataset("josefbednar/prague-streetview-50k", split="train")
     
     os.makedirs("matches", exist_ok=True)
     found = 0
 
     for row in ds:
         if row['image_id'] in ids:
-            # Hugging Face downloads the image bytes only here
             img = row['image']
             save_path = f"matches/{row['image_id']}.jpg"
             img.save(save_path)
@@ -53,8 +52,8 @@ def main():
     dim = 2048
     model = CosPlaceModel(device=config.device, output_dim=dim)
     ranker = XFeatRanker(config.device)
-    # db = Database(vector_dim=dim)
-    db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
+    db = Database(vector_dim=dim)
+    # db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
 
     target_img_filename = 'imga.png'
     target_img = Image.open(target_img_filename)
@@ -65,7 +64,7 @@ def main():
     # files = [f for f in listdir(directory) if f.endswith('.png')]
     # filenames = [f'{directory}/{f}' for f in files]
     
-    results = db.query_image(model, target_img)
+    results = db.query_image(model, target_img, top_k=100)
     # ranked = ranker.rank(target_img_filename, filenames)
 
     print(f'Initial rankings:')
