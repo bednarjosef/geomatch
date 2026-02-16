@@ -5,6 +5,7 @@ import numpy as np
 
 from PIL import Image
 from os import listdir
+from huggingface_hub import snapshot_download
 
 
 class Database():
@@ -18,6 +19,11 @@ class Database():
         ])
 
         self.table = db.create_table('embeddings', schema=schema, exist_ok=True)
+
+    @classmethod
+    def from_huggingface(cls, hf_repo, vector_dim: int = 2048):
+        path = snapshot_download(hf_repo, repo_type='dataset')
+        return cls(vector_dim, path)
 
     # CosPlace 2048: bcfde, clip ViT-L-14: debcf, CosPlace 512: bfdce
     def embed_and_save_batch(self, model, images, filenames):

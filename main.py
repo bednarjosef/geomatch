@@ -23,28 +23,31 @@ class config:
 
 
 def main():
-    model = CosPlaceModel(config.device)
+    dim = 2048
+    model = CosPlaceModel(device=config.device, output_dim=dim)
     ranker = XFeatRanker(config.device)
-    db = Database()
+    # db = Database(vector_dim=dim)
+    db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
 
     target_img_filename = 'imga.png'
-    directory = 'imgs'
-
-    db.add_from_dir(model, 'imgs')
     target_img = Image.open(target_img_filename)
-    files = [f for f in listdir(directory) if f.endswith('.png')]
-    filenames = [f'{directory}/{f}' for f in files]
+
+    # directory = 'imgs'
+    # db.add_from_dir(model, 'imgs')
+    
+    # files = [f for f in listdir(directory) if f.endswith('.png')]
+    # filenames = [f'{directory}/{f}' for f in files]
     
     results = db.query_image(model, target_img)
-    ranked = ranker.rank(target_img_filename, filenames)
+    # ranked = ranker.rank(target_img_filename, filenames)
 
     print(f'Initial rankings:')
     for idx, result in enumerate(results):
         print(f'{idx + 1}.\t{result['filename']}\t{result['_distance']}')
 
-    print(f'Refined rankings:')
-    for idx, item in enumerate(ranked):
-        print(f'{idx + 1}.\t{item['filename']}\t{item['matches']}')
+    # print(f'Refined rankings:')
+    # for idx, item in enumerate(ranked):
+    #     print(f'{idx + 1}.\t{item['filename']}\t{item['matches']}')
 
 
 if __name__ == '__main__':
