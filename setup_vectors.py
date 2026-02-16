@@ -23,7 +23,7 @@ def collate_fn(batch):
 def main():
     HF_IMG_DATASET = 'josefbednar/prague-streetview-50k'
     HF_TARGET_REPO = 'josefbednar/prague-streetview-50k-vectors'
-    BATCH_SIZE = 64
+    BATCH_SIZE = 128
     DB_PATH = './embeddings'
 
     dim = 2048
