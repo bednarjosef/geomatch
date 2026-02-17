@@ -9,7 +9,7 @@ from datasets import load_dataset
 
 from clip_model import CLIPModel
 from my_cosplace_model import CosPlaceModel
-from ranker import Ranker
+# from ranker import Ranker
 from xfeat_ranker import XFeatRanker
 from database import Database
 
