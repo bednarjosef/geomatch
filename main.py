@@ -33,11 +33,13 @@ def save_matches(ids):
     
     os.makedirs("matches", exist_ok=True)
     found = 0
+    paths = []
 
     for row in ds:
         if row['image_id'] in ids:
             img = row['image']
             save_path = f"matches/{row['image_id']}.jpg"
+            paths.append(save_path)
             img.save(save_path)
             
             print(f"Saved: {save_path}")
@@ -46,6 +48,7 @@ def save_matches(ids):
             if found >= len(ids):
                 print("All matches found!")
                 break
+    return paths
 
 
 def main():
@@ -65,18 +68,18 @@ def main():
     # filenames = [f'{directory}/{f}' for f in files]
     
     results = db.query_image(model, target_img, top_k=100)
-    # ranked = ranker.rank(target_img_filename, filenames)
+
+    ids = [r['filename'] for r in results]
+    filenames = save_matches(ids)
+    ranked = ranker.rank(target_img_filename, filenames)
 
     print(f'Initial rankings:')
     for idx, result in enumerate(results):
         print(f'{idx + 1}.\t{result['filename']}\t{result['_distance']}')
 
-    ids = [r['filename'] for r in results]
-    save_matches(ids)
-
-    # print(f'Refined rankings:')
-    # for idx, item in enumerate(ranked):
-    #     print(f'{idx + 1}.\t{item['filename']}\t{item['matches']}')
+    print(f'Refined rankings:')
+    for idx, item in enumerate(ranked):
+        print(f'{idx + 1}.\t{item['filename']}\t{item['matches']}')
 
 
 if __name__ == '__main__':

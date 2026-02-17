@@ -14,13 +14,15 @@ class XFeatRanker():
         self.xfeat.dev = torch.device(device)
         self.xfeat.net.to(device)
 
-    def preprocess_image(self, filename):
+    def preprocess_image_from_filename(self, filename):
         image = load_image(filename, resize=512)
-        
-        if len(image.shape) == 3:
-            image = image.unsqueeze(0)
+        return self.preprocess_image(image)
 
-        return image.to(self.device)
+    def preprocess_image(self, image_tensor):
+        if len(image_tensor.shape) == 3:
+            image_tensor = image_tensor.unsqueeze(0)
+
+        return image_tensor.to(self.device)
 
     def extract_features(self, image_tensor):
         out = self.xfeat.detectAndCompute(image_tensor, top_k=1024)[0]
