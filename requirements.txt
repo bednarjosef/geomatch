@@ -13,6 +13,7 @@ cycler==0.12.1
 datasets==4.5.0
 deprecation==2.1.0
 dill==0.4.0
+duckdb==1.4.4
 filelock==3.20.0
 fonttools==4.61.1
 frozenlist==1.8.0
@@ -31,7 +32,6 @@ kornia_rs==0.1.10
 lance-namespace==0.4.5
 lance-namespace-urllib3-client==0.4.5
 lancedb==0.29.2
--e git+https://github.com/cvg/LightGlue.git@56961b368cfa146959e850e181cb0ab6f23a728e#egg=lightglue
 markdown-it-py==4.0.0
 MarkupSafe==2.1.5
 matplotlib==3.10.8

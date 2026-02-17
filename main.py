@@ -55,8 +55,8 @@ def main():
     dim = 2048
     model = CosPlaceModel(device=config.device, output_dim=dim)
     ranker = XFeatRanker(config.device)
-    db = Database(vector_dim=dim)
-    # db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
+    # db = Database(vector_dim=dim)
+    db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
 
     target_img_filename = 'imga.png'
     target_img = Image.open(target_img_filename)
