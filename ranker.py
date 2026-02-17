@@ -1,10 +1,8 @@
 import time
-import torch
+from operator import itemgetter
+
 from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
 from LightGlue.lightglue.utils import load_image
-from PIL import Image
-
-from operator import itemgetter
 
 
 class Ranker():
@@ -12,9 +10,9 @@ class Ranker():
         self.device = device
 
         if extractor_type == 'aliked':
-            self.extractor = ALIKED(max_num_keypoints=128, model_name='aliked-n16').eval()
+            self.extractor = ALIKED(max_num_keypoints=1024, model_name='aliked-n16').eval()
         elif extractor_type == 'superpoint':
-            self.extractor = SuperPoint(max_num_keypoints=128).eval()
+            self.extractor = SuperPoint(max_num_keypoints=1024).eval()
 
         self.matcher = LightGlue(features=extractor_type).eval()
 

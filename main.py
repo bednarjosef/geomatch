@@ -9,7 +9,7 @@ from datasets import load_dataset
 
 from clip_model import CLIPModel
 from my_cosplace_model import CosPlaceModel
-# from ranker import Ranker
+from ranker import Ranker
 from xfeat_ranker import XFeatRanker
 from database import Database
 
@@ -54,7 +54,8 @@ def save_matches(ids):
 def main():
     dim = 2048
     model = CosPlaceModel(device=config.device, output_dim=dim)
-    ranker = XFeatRanker(config.device)
+    # ranker = XFeatRanker(config.device)
+    ranker = Ranker(config.device, extractor_type='aliked')
     # db = Database(vector_dim=dim)
     db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
 
@@ -70,7 +71,8 @@ def main():
     results = db.query_image(model, target_img, top_k=100)
 
     ids = [r['filename'] for r in results]
-    filenames = save_matches(ids)
+    filenames = [f'matches/{fname}.jpg' for fname in ids]
+    # filenames = save_matches(ids)
     ranked = ranker.rank(target_img_filename, filenames)
 
     print(f'Initial rankings:')

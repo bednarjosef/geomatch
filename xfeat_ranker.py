@@ -40,8 +40,8 @@ class XFeatRanker():
     def rank(self, target_filename, candidate_filenames):
         print(f'Ranking feature matches...')
         data = []
-        target_tensor = self.preprocess_image(target_filename)
-        candidate_tensors = [self.preprocess_image(fname) for fname in candidate_filenames]
+        target_tensor = self.preprocess_image_from_filename(target_filename)
+        candidate_tensors = [self.preprocess_image_from_filename(fname) for fname in candidate_filenames]
 
         target_features = self.extract_features(target_tensor)
 
