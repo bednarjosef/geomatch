@@ -1,4 +1,5 @@
-import torch
+import torch, time
+from statistics import mean
 from operator import itemgetter
 from pathlib import Path
 
@@ -74,6 +75,11 @@ class Ranker():
         print(f'Ranking feature matches...')
         data = []
 
+        loads = []
+        unquants = []
+        matches = []
+        datas = []
+
         with torch.inference_mode():
             target_tensor = self.preprocess_image(target_filename)
             target_feature = self.extract_features(target_tensor)
@@ -82,10 +88,14 @@ class Ranker():
             # candidate_features = [torch.load(fname, map_location=self.device) for fname in candidate_features_filenames]
 
             for filename in candidate_features_filenames:
+                t0 = time.time()
                 candidate_feature = torch.load(filename, map_location=self.device)
+                t1 = time.time()
                 candidate_feature_float32 = unquantize_and_cast(candidate_feature)
+                t2 = time.time()
 
                 score = self.match(target_feature_float32, candidate_feature_float32)
+                t3 = time.time()
                 image_id = Path(filename).stem
 
                 metadata = candidate_feature['metadata']
@@ -104,5 +114,21 @@ class Ranker():
                     'id': image_id,
                     'filename' : filename,
                 })
+                t4 = time.time()
+                t_load = round(t1 - t0, 6)
+                t_unquant = round(t2 - t1, 6)
+                t_match = round(t3 - t2, 6)
+                t_data = round(t4 - t3, 2)
+                loads.append(t_load)
+                unquants.append(t_unquant)
+                matches.append(t_match)
+                datas.append(t_data)
+                print(f'load: {t_load}s | unquant: {t_unquant}s | match: {t_match}s | data: {t_data}s')
+
+        avg_load = mean(loads)
+        avg_unquant = mean(unquants)
+        avg_match = mean(matches)
+        avg_data = mean(datas)
+        print(f'avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
 
         return sorted(data, key=itemgetter('matches'), reverse=True)
