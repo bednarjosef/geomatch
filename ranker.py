@@ -80,11 +80,11 @@ class Ranker():
         target_tensor = self.preprocess_image(target_filename)
         # candidate_tensors = [self.preprocess_image(fname) for fname in candidate_filenames]
 
-        target_features = self.extract_features(target_tensor)
+        target_feature = self.extract_features(target_tensor)
         candidate_features = [torch.load(fname, map_location=self.device) for fname in candidate_features_filenames]
 
-        for candidate_features, filename in zip(candidate_features, candidate_features_filenames):
-            score = self.match(target_features, candidate_features)
+        for candidate_feature, filename in zip(candidate_features, candidate_features_filenames):
+            score = self.match(target_feature, candidate_feature)
             
             data.append({
                 'filename' : filename,
