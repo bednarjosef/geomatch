@@ -48,6 +48,8 @@ def optimize_feature(image_feature, precision):
                 
         else:
             optimized_feature[k] = v
+    
+    return optimized_feature
 
 def save_feature(dir_path, image_id, image_feature):
     prefix = image_id[:2]
