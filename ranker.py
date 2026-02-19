@@ -6,6 +6,22 @@ from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
 from LightGlue.lightglue.utils import load_image
 
 
+# GEMINI CODE
+def unquantize_and_cast(self, features):
+    f32_dict = {}
+    for k, v in features.items():
+        if isinstance(v, torch.Tensor):
+            if v.dtype == torch.int8:
+                f32_dict[k] = (v.float() / 127.0)
+            elif v.dtype == torch.float16:
+                f32_dict[k] = v.float()
+            else:
+                f32_dict[k] = v
+        else:
+            f32_dict[k] = v
+    return f32_dict
+
+
 class Ranker():
     def __init__(self, device='cuda', extractor_type='aliked'):
         self.device = device
@@ -49,60 +65,44 @@ class Ranker():
                 optimized_feature[k] = v
                 
         return optimized_feature
-
     
     def match(self, features0, features1):
-
-        # GEMINI CODE
-        def unquantize_and_cast(features):
-            f32_dict = {}
-            for k, v in features.items():
-                if isinstance(v, torch.Tensor):
-                    if v.dtype == torch.int8:
-                        f32_dict[k] = (v.float() / 127.0)
-                    elif v.dtype == torch.float16:
-                        f32_dict[k] = v.float()
-                    else:
-                        f32_dict[k] = v
-                else:
-                    f32_dict[k] = v
-            return f32_dict
-
-        # convert features saved as float16 into float32
-        features0_float32 = unquantize_and_cast(features0)
-        features1_float32 = unquantize_and_cast(features1)
-        
-        data = self.matcher( {'image0': features0_float32, 'image1': features1_float32} )
+        data = self.matcher( {'image0': features0, 'image1': features1} )
         return len(data['matches'][0])
 
     def rank(self, target_filename, candidate_features_filenames):
         print(f'Ranking feature matches...')
         data = []
-        target_tensor = self.preprocess_image(target_filename)
-        # candidate_tensors = [self.preprocess_image(fname) for fname in candidate_filenames]
 
-        target_feature = self.extract_features(target_tensor)
-        candidate_features = [torch.load(fname, map_location=self.device) for fname in candidate_features_filenames]
+        with torch.inference_mode():
+            target_tensor = self.preprocess_image(target_filename)
+            target_feature = self.extract_features(target_tensor)
+            target_feature_float32 = unquantize_and_cast(target_feature)
 
-        for candidate_feature, filename in zip(candidate_features, candidate_features_filenames):
-            score = self.match(target_feature, candidate_feature)
-            image_id = Path(filename).stem
+            # candidate_features = [torch.load(fname, map_location=self.device) for fname in candidate_features_filenames]
 
-            metadata = candidate_feature['metadata']
+            for filename in candidate_features_filenames:
+                candidate_feature = torch.load(filename, map_location=self.device)
+                candidate_feature_float32 = unquantize_and_cast(candidate_feature)
 
-            lat = metadata['latitude']
-            lon = metadata['longitude']
-            date = metadata['date']
-            elevation = metadata['elevation']
-            
-            data.append({
-                'matches': score,
-                'latitude': lat,
-                'longitude': lon,
-                'elevation': elevation,
-                'date': date,
-                'id': image_id,
-                'filename' : filename,
-            })
+                score = self.match(target_feature_float32, candidate_feature_float32)
+                image_id = Path(filename).stem
+
+                metadata = candidate_feature['metadata']
+
+                lat = metadata['latitude']
+                lon = metadata['longitude']
+                date = metadata['date']
+                elevation = metadata['elevation']
+                
+                data.append({
+                    'matches': score,
+                    'latitude': lat,
+                    'longitude': lon,
+                    'elevation': elevation,
+                    'date': date,
+                    'id': image_id,
+                    'filename' : filename,
+                })
 
         return sorted(data, key=itemgetter('matches'), reverse=True)
