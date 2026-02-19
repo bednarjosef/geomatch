@@ -7,7 +7,7 @@ from LightGlue.lightglue.utils import load_image
 
 
 # GEMINI CODE
-def unquantize_and_cast(self, features):
+def unquantize_and_cast(features):
     f32_dict = {}
     for k, v in features.items():
         if isinstance(v, torch.Tensor):
