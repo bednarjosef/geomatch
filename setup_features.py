@@ -21,35 +21,20 @@ to_tensor = transforms.ToTensor()
 def collate_fn(batch):
     images = torch.stack([to_tensor(item['image']) for item in batch])
     ids = [item['image_id'] for item in batch]
-    return images, ids
+    dates = [item['date'] for item in batch]
+    lats = [item['latitude'] for item in batch]
+    lons = [item['longitude'] for item in batch]
+    elevs = [item['elevation'] for item in batch]
+    return images, ids, dates, lats, lons, elevs
 
-def optimize_feature(image_feature, precision):
-    optimized_feature = {}
-
+def to_cpu(image_feature):
+    cpu_feature = {}
     for k, v in image_feature.items():
         if isinstance(v, torch.Tensor):
-            
-            if precision == 'int8':
-                if k == 'descriptors':
-                    optimized_feature[k] = (v * 127.0).clamp(-128, 127).round().to(torch.int8).cpu()
-                elif v.dtype == torch.float32:
-                    optimized_feature[k] = v.half().cpu()
-                else:
-                    optimized_feature[k] = v.cpu()
-                    
-            elif precision == 'float16':
-                if v.dtype == torch.float32:
-                    optimized_feature[k] = v.half().cpu()
-                else:
-                    optimized_feature[k] = v.cpu()
-                    
-            elif precision == 'float32':
-                optimized_feature[k] = v.cpu()
-                
+            cpu_feature[k] = v.cpu()
         else:
-            optimized_feature[k] = v
-    
-    return optimized_feature
+            cpu_feature[k] = v
+    return cpu_feature
 
 def save_feature(dir_path, image_id, image_feature):
     prefix = image_id[:2]
@@ -73,14 +58,21 @@ def main():
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=12, collate_fn=collate_fn)
 
     print(f'Starting processing with {PRECISION} precision...')
-    for batch_images, batch_ids in tqdm(dataloader, desc='Processing Batches'):
+    for batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevations in tqdm(dataloader, desc='Processing Batches'):
 
-        for image, image_id in zip(batch_images, batch_ids):
+        for image, image_id, date, lat, lon, elevation in zip(batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevations):
             image_tensor = image.unsqueeze(0).to(config.device)
             image_feature = ranker.extract_features(image_tensor, use_float16=True, quantize_int8=True)
 
-            optimized_feature = optimize_feature(image_feature, PRECISION)
-            save_feature(FEATURES_PATH, image_id, optimized_feature)
+            cpu_feature = to_cpu(image_feature)
+            cpu_feature['metadata'] = {
+                'date': date,
+                'latitude': lat,
+                'longitude': lon,
+                'elevation': elevation
+            }
+
+            save_feature(FEATURES_PATH, image_id, cpu_feature)
             
     print(f'Inference and saving complete.')
 

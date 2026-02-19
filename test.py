@@ -24,7 +24,14 @@ def collate_fn(batch):
     # Stack the PIL images into a batch tensor on the CPU
     images = torch.stack([to_tensor(item['image']) for item in batch])
     ids = [item['image_id'] for item in batch]
-    return images, ids
+    
+    # Extract the new metadata fields
+    dates = [item['date'] for item in batch]
+    lats = [item['latitude'] for item in batch]
+    lons = [item['longitude'] for item in batch]
+    elevs = [item['elevation'] for item in batch]
+    
+    return images, ids, dates, lats, lons, elevs
 
 def get_dir_size(path='.'):
     total = 0
@@ -54,27 +61,19 @@ def main():
     start_time = time.time()
     
     with torch.no_grad():
-        for i, (batch_images, batch_ids) in enumerate(tqdm(dataloader, desc='Processing Batches', total=NUM_TEST_BATCHES)):
+        # Unpack all 6 variables from the updated collate_fn
+        for i, (batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevs) in enumerate(tqdm(dataloader, desc='Processing Batches', total=NUM_TEST_BATCHES)):
             if i >= NUM_TEST_BATCHES:
                 break
             
-            for single_img, image_id in zip(batch_images, batch_ids):
+            # Zip them together for the inner loop
+            for single_img, image_id, date, lat, lon, elev in zip(batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevs):
                 img_tensor = single_img.unsqueeze(0).to(config.device)
                 image_feature = ranker.extract_features(img_tensor)
 
                 optimized_feature = {}
-                
-                # FLOAT16
-                # for k, v in image_feature.items():
-                #     if isinstance(v, torch.Tensor):
-                #         if v.dtype == torch.float32:
-                #             v = v.half() 
-                            
-                #         optimized_feature[k] = v.cpu() 
-                #     else:
-                #         optimized_feature[k] = v
 
-                # INT8
+                # INT8 Quantization Logic
                 for k, v in image_feature.items():
                     if isinstance(v, torch.Tensor):
                         if k == 'descriptors':
@@ -89,6 +88,14 @@ def main():
                             optimized_feature[k] = v.cpu()
                     else:
                         optimized_feature[k] = v
+
+                # Inject the metadata dictionary before saving
+                optimized_feature['metadata'] = {
+                    'date': date,
+                    'latitude': lat,
+                    'longitude': lon,
+                    'elevation': elev
+                }
 
                 prefix = image_id[:2]
                 directory = os.path.join(FEATURES_PATH, prefix)
