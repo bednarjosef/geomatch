@@ -1,4 +1,4 @@
-import time, torch
+import torch
 from operator import itemgetter
 
 from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
@@ -51,7 +51,7 @@ class Ranker():
 
     
     def match(self, features0, features1):
-        
+
         # GEMINI CODE
         def unquantize_and_cast(features):
             f32_dict = {}
@@ -74,23 +74,17 @@ class Ranker():
         data = self.matcher( {'image0': features0_float32, 'image1': features1_float32} )
         return len(data['matches'][0])
 
-    def rank(self, target_filename, candidate_filenames):
+    def rank(self, target_filename, candidate_features_filenames):
         print(f'Ranking feature matches...')
         data = []
         target_tensor = self.preprocess_image(target_filename)
-        candidate_tensors = [self.preprocess_image(fname) for fname in candidate_filenames]
+        # candidate_tensors = [self.preprocess_image(fname) for fname in candidate_filenames]
 
         target_features = self.extract_features(target_tensor)
+        candidate_features = [torch.load(fname, map_location=self.device) for fname in candidate_features_filenames]
 
-        for candidate, filename in zip(candidate_tensors, candidate_filenames):
-            t0 = time.time()
-            candidate_features = self.extract_features(candidate)
-            t1 = time.time()
+        for candidate_features, filename in zip(candidate_features, candidate_features_filenames):
             score = self.match(target_features, candidate_features)
-            t2 = time.time()
-            t_feat = round(t1 - t0, 2)
-            t_match = round(t2 - t1, 2)
-            print(f'Extraction: {t_feat}s, matching: {t_match}s')
             
             data.append({
                 'filename' : filename,
