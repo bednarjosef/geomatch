@@ -1,16 +1,12 @@
 from dataclasses import dataclass
-from os import listdir
 import os
 from PIL import Image
-import torch.nn as nn
 import torch
 
 from datasets import load_dataset
 
-from clip_model import CLIPModel
 from my_cosplace_model import CosPlaceModel
 from ranker import Ranker
-from xfeat_ranker import XFeatRanker
 from database import Database
 
 # PLAN:
@@ -51,32 +47,35 @@ def save_matches(ids):
     return paths
 
 
+def get_prefix(id: str):
+    return id[:2]
+
+
+def get_filenames_from_top_k(features_path, top_k):
+    ids = [r['filename'] for r in top_k]
+    return [f'{features_path}/{get_prefix(fname)}/{fname}.jpg' for fname in ids]
+
+
 def main():
+    FEATURES_PATH = '/mnt/storage-box-1/prague-streetview-50k-features-alikedn16-1024points-int8'
+
     dim = 2048
+    k = 100
+    
     model = CosPlaceModel(device=config.device, output_dim=dim)
-    # ranker = XFeatRanker(config.device)
     ranker = Ranker(config.device, extractor_type='aliked')
-    # db = Database(vector_dim=dim)
     db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
 
     target_img_filename = 'imga.png'
     target_img = Image.open(target_img_filename)
-
-    # directory = 'imgs'
-    # db.add_from_dir(model, 'imgs')
     
-    # files = [f for f in listdir(directory) if f.endswith('.png')]
-    # filenames = [f'{directory}/{f}' for f in files]
+    top_k = db.query_image(model, target_img, top_k=k)
     
-    results = db.query_image(model, target_img, top_k=100)
-
-    ids = [r['filename'] for r in results]
-    filenames = [f'matches/{fname}.jpg' for fname in ids]
-    # filenames = save_matches(ids)
+    filenames = get_filenames_from_top_k(FEATURES_PATH, top_k)
     ranked = ranker.rank(target_img_filename, filenames)
 
     print(f'Initial rankings:')
-    for idx, result in enumerate(results):
+    for idx, result in enumerate(top_k):
         print(f'{idx + 1}.\t{result['filename']}\t{result['_distance']}')
 
     print(f'Refined rankings:')
