@@ -57,7 +57,7 @@ def get_filenames_from_top_k(features_path, top_k):
 
 
 def main():
-    FEATURES_PATH = '/mnt/storage-box-1/prague-streetview-50k-features-alikedn16-1024points-int8'
+    FEATURES_PATH = '/mnt/storage-box-1/prague-streetview-50k-features-alikedn16-1024points-int8-2'
 
     dim = 2048
     k = 100

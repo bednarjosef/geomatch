@@ -92,13 +92,15 @@ class Ranker():
 
             lat = metadata['latitude']
             lon = metadata['longitude']
-            # date = metadata['date']
-            # elevation = metadata['elevation']
+            date = metadata['date']
+            elevation = metadata['elevation']
             
             data.append({
                 'matches': score,
                 'latitude': lat,
                 'longitude': lon,
+                'elevation': elevation,
+                'date': date,
                 'id': image_id,
                 'filename' : filename,
             })
