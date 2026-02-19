@@ -3,23 +3,30 @@ import time
 from dataclasses import dataclass
 
 import torch
+from torchvision import transforms
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 from tqdm import tqdm
 
-from xfeat_ranker import XFeatRanker
+from ranker import Ranker
+
+import torch.multiprocessing as mp
+mp.set_sharing_strategy('file_system')
 
 @dataclass
 class config:
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+# Define transform
+to_tensor = transforms.ToTensor()
+
 def collate_fn(batch):
-    images = [item['image'] for item in batch]
+    # Stack the PIL images into a batch tensor on the CPU
+    images = torch.stack([to_tensor(item['image']) for item in batch])
     ids = [item['image_id'] for item in batch]
     return images, ids
 
 def get_dir_size(path='.'):
-    """Recursively calculates the size of a directory in bytes."""
     total = 0
     with os.scandir(path) as it:
         for entry in it:
@@ -31,13 +38,11 @@ def get_dir_size(path='.'):
 
 def main():
     HF_IMG_DATASET = 'josefbednar/prague-streetview-50k'
-    BATCH_SIZE = 128
-    NUM_TEST_BATCHES = 10
-    
-    # We use a separate test directory so you can easily delete it later
-    FEATURES_PATH = './test_extracted_features' 
+    BATCH_SIZE = 16
+    NUM_TEST_BATCHES = 200
+    FEATURES_PATH = './test_extracted_features'
 
-    ranker = XFeatRanker(config.device)
+    ranker = Ranker(config.device)
     
     print(f'Downloading/Loading dataset ({HF_IMG_DATASET})...')
     dataset = load_dataset(HF_IMG_DATASET, split='train')
@@ -45,56 +50,69 @@ def main():
 
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=12, collate_fn=collate_fn)
 
-    print(f'Starting processing for {NUM_TEST_BATCHES} batches...')
+    print(f'Starting processing...')
     start_time = time.time()
     
-    # Wrap tqdm with enumerate to count the batches
-    for i, (batch_images, batch_ids) in enumerate(tqdm(dataloader, desc='Processing Batches', total=NUM_TEST_BATCHES)):
-        # Stop the loop once we hit our target number of batches
-        if i >= NUM_TEST_BATCHES:
-            break
+    with torch.no_grad():
+        for i, (batch_images, batch_ids) in enumerate(tqdm(dataloader, desc='Processing Batches', total=NUM_TEST_BATCHES)):
+            if i >= NUM_TEST_BATCHES:
+                break
             
-        batch_data = ranker.extract_features(batch_images)
-        
-        for image_feature, image_id in zip(batch_data, batch_ids):
-            prefix = image_id[:2]
-            directory = os.path.join(FEATURES_PATH, prefix)
-            os.makedirs(directory, exist_ok=True)
-            path = os.path.join(directory, f'{image_id}.pt')
+            for single_img, image_id in zip(batch_images, batch_ids):
+                img_tensor = single_img.unsqueeze(0).to(config.device)
+                image_feature = ranker.extract_features(img_tensor)
 
-            # GEMINI LINE: Safely move tensors to CPU
-            image_feature = {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in image_feature.items()}
+                optimized_feature = {}
+                
+                # FLOAT16
+                # for k, v in image_feature.items():
+                #     if isinstance(v, torch.Tensor):
+                #         if v.dtype == torch.float32:
+                #             v = v.half() 
+                            
+                #         optimized_feature[k] = v.cpu() 
+                #     else:
+                #         optimized_feature[k] = v
 
-            torch.save(image_feature, path)
+                # INT8
+                for k, v in image_feature.items():
+                    if isinstance(v, torch.Tensor):
+                        if k == 'descriptors':
+                            v_scaled = (v * 127.0).clamp(-128, 127).round().to(torch.int8)
+                            optimized_feature[k] = v_scaled.cpu()
+                            
+                        elif v.dtype == torch.float32:
+                            # Cast to float16 on the GPU, THEN move to CPU
+                            optimized_feature[k] = v.half().cpu()
+                        
+                        else:
+                            optimized_feature[k] = v.cpu()
+                    else:
+                        optimized_feature[k] = v
+
+                prefix = image_id[:2]
+                directory = os.path.join(FEATURES_PATH, prefix)
+                os.makedirs(directory, exist_ok=True)
+                path = os.path.join(directory, f'{image_id}.pt')
+
+                torch.save(optimized_feature, path)
 
     end_time = time.time()
     
-    # --- Analytics & Estimations ---
+    # --- Analytics ---
     elapsed_time = end_time - start_time
     num_processed_images = NUM_TEST_BATCHES * BATCH_SIZE
     total_images_in_dataset = len(dataset)
-    
-    # Calculate disk space used
     size_bytes = get_dir_size(FEATURES_PATH)
     size_mb = size_bytes / (1024 * 1024)
-    
-    # Extrapolate to the full dataset
-    estimated_total_mb = (size_mb / num_processed_images) * total_images_in_dataset
-    estimated_total_gb = estimated_total_mb / 1024
+    estimated_total_gb = ((size_mb / num_processed_images) * total_images_in_dataset) / 1024
     estimated_total_hours = (elapsed_time / num_processed_images) * total_images_in_dataset / 3600
     
-    print(f'\n' + '='*40)
-    print(f'             TEST RESULTS')
-    print(f'='*40)
+    print(f'\nTEST RESULTS:')
     print(f'Images Processed: {num_processed_images}')
-    print(f'Time Elapsed:     {elapsed_time:.2f} seconds ({num_processed_images / elapsed_time:.2f} img/sec)')
-    print(f'Disk Space Used:  {size_mb:.2f} MB')
+    print(f'Time:             {elapsed_time:.2f}s ({num_processed_images / elapsed_time:.2f} img/sec)')
     print(f'Avg File Size:    {(size_mb * 1024) / num_processed_images:.2f} KB/file')
-    print(f'-'*40)
-    print(f'ESTIMATED FULL RUN (50k images):')
-    print(f'Total Time:       ~{estimated_total_hours:.2f} hours')
-    print(f'Total Disk Space: ~{estimated_total_gb:.2f} GB')
-    print(f'='*40 + '\n')
+    print(f'ESTIMATED FULL RUN: ~{estimated_total_hours:.2f} hours, ~{estimated_total_gb:.2f} GB\n')
 
 if __name__ == '__main__':
     main()

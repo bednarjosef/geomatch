@@ -1,4 +1,4 @@
-import time
+import time, torch
 from operator import itemgetter
 
 from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
@@ -23,11 +23,55 @@ class Ranker():
         image = load_image(filename)
         return image.to(self.device)
 
-    def extract_features(self, image_tensor):
-        return self.extractor.extract(image_tensor)
+    # TODO: change to precision string ('float32', 'float16', 'int8')
+    def extract_features(self, image_tensor, use_float16=True, quantize_int8=True):
+        image_feature = self.extractor.extract(image_tensor)
+
+        if not use_float16 and not quantize_int8:
+            return image_feature
+
+        optimized_feature = {}
+        for k, v in image_feature.items():
+            if isinstance(v, torch.Tensor):
+                
+                # GEMINI CODE
+                if quantize_int8 and k == 'descriptors':
+                    v_scaled = (v * 127.0).clamp(-128, 127).round().to(torch.int8)
+                    optimized_feature[k] = v_scaled
+                
+                elif use_float16 and v.dtype == torch.float32:
+                    optimized_feature[k] = v.half()
+                
+                else:
+                    optimized_feature[k] = v
+            else:
+                optimized_feature[k] = v
+                
+        return optimized_feature
+
     
     def match(self, features0, features1):
-        data = self.matcher( {'image0': features0, 'image1': features1} )
+        
+        # GEMINI CODE
+        def unquantize_and_cast(features):
+            f32_dict = {}
+            for k, v in features.items():
+                if isinstance(v, torch.Tensor):
+                    if v.dtype == torch.int8:
+                        f32_dict[k] = (v.float() / 127.0)
+                    elif v.dtype == torch.float16:
+                        f32_dict[k] = v.float()
+                    else:
+                        f32_dict[k] = v
+                else:
+                    f32_dict[k] = v
+            return f32_dict
+
+        # convert features saved as float16 into float32
+        features0_float32 = unquantize_and_cast(features0)
+        features1_float32 = unquantize_and_cast(features1)
+        
+        data = self.matcher( {'image0': features0_float32, 'image1': features1_float32} )
         return len(data['matches'][0])
 
     def rank(self, target_filename, candidate_filenames):
