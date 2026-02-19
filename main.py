@@ -80,7 +80,7 @@ def main():
 
     print(f'Refined rankings:')
     for idx, item in enumerate(ranked):
-        print(f'{idx + 1}.\t{item['filename']}\t{item['matches']}')
+        print(f'{idx + 1}.\t{item['id']}\t{item['matches']}\t{item['latitude']}, {item['longitude']}\t{item['elevation']}\t{item['date']}')
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import torch
 from operator import itemgetter
+from pathlib import Path
 
 from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
 from LightGlue.lightglue.utils import load_image
@@ -85,10 +86,21 @@ class Ranker():
 
         for candidate_feature, filename in zip(candidate_features, candidate_features_filenames):
             score = self.match(target_feature, candidate_feature)
+            image_id = Path(filename).stem
+
+            metadata = candidate_feature['metadata']
+
+            lat = metadata['latitude']
+            lon = metadata['longitude']
+            # date = metadata['date']
+            # elevation = metadata['elevation']
             
             data.append({
-                'filename' : filename,
                 'matches': score,
+                'latitude': lat,
+                'longitude': lon,
+                'id': image_id,
+                'filename' : filename,
             })
 
         return sorted(data, key=itemgetter('matches'), reverse=True)
