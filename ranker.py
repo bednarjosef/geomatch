@@ -128,99 +128,73 @@ class Ranker():
         if verbose:
             print(f'Reranking initial results...')
 
-        data = []
-
         loads = []
         unquants = []
         matches = []
         datas = []
 
-        with torch.inference_mode():
-            target_tensor = self.preprocess_image(target_filename)
-            target_feature = self.extract_features(target_tensor)
-            target_feature_float32 = unquantize_and_cast(target_feature)
+        print(f'Preparing query image for reranking...')
+        te0 = time.time()
+        target_tensor = self.preprocess_image(target_filename)
+        te1 = time.time()
+        target_feature = self.extract_features(target_tensor)
+        te2 = time.time()
+        target_feature_float32 = unquantize_and_cast(target_feature)
+        te3 = time.time()
+        print(f'Query image preprocessed in {round(te1-te0, 2)}s, features extracted in {round(te2-te1, 2)}s, unquantized in {round(te3-te2, 2)}s')
 
-            # print(f'Preranking feature matches using MNN Cascade...')
-            ranked_data = []
-            t_pre_0 = time.time()
+        ranked_data = []
+        t_pre_0 = time.time()
 
-            # GEMINI: PRERANK WITH MNN MATCH
-            for filename in candidate_features_filenames:
-                candidate_feature = torch.load(filename, map_location=self.device)
-                candidate_feature_float32 = unquantize_and_cast(candidate_feature)
+        for filename in candidate_features_filenames:
+            t0 = time.time()
+            candidate_feature = torch.load(filename, map_location=self.device)
+            t1 = time.time()
+            candidate_feature_float32 = unquantize_and_cast(candidate_feature)
+            t2 = time.time()
 
-                ransac_score = self.ransac_match(target_feature_float32, candidate_feature_float32)
+            ransac_score = self.ransac_match(target_feature_float32, candidate_feature_float32)
+            t3 = time.time()
 
-                image_id = Path(filename).stem
-                metadata = candidate_feature['metadata']
+            image_id = Path(filename).stem
+            metadata = candidate_feature['metadata']
 
-                lat = metadata['latitude']
-                lon = metadata['longitude']
-                date = metadata['date']
-                elevation = metadata['elevation']   
-                
-                ranked_data.append({
-                    'matches': ransac_score,
-                    'latitude': lat,
-                    'longitude': lon,
-                    'elevation': elevation,
-                    'date': date,
-                    'id': image_id,
-                    'filename': filename,
-                })
+            lat = metadata['latitude']
+            lon = metadata['longitude']
+            date = metadata['date']
+            elevation = metadata['elevation']   
+            
+            ranked_data.append({
+                'matches': ransac_score,
+                'latitude': lat,
+                'longitude': lon,
+                'elevation': elevation,
+                'date': date,
+                'id': image_id,
+                'filename': filename,
+            })
+            t4 = time.time()
 
-            ranked_candidates = sorted(ranked_data, key=itemgetter('matches'), reverse=True)
-            t_pre_1 = time.time()
-            t_pre = round(t_pre_1 - t_pre_0, 2)
-            print(f'Reranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
+            t_load = round(t1 - t0, 6)
+            t_unquant = round(t2 - t1, 6)
+            t_match = round(t3 - t2, 6)
+            t_data = round(t4 - t3, 2)
+            loads.append(t_load)
+            unquants.append(t_unquant)
+            matches.append(t_match)
+            datas.append(t_data)
 
-        #     for filename in top_candidate_features_filenames:
-        #         t0 = time.time()
-        #         candidate_feature = torch.load(filename, map_location=self.device)
-        #         t1 = time.time()
-        #         candidate_feature_float32 = unquantize_and_cast(candidate_feature)
-        #         t2 = time.time()
+        ranked_candidates = sorted(ranked_data, key=itemgetter('matches'), reverse=True)
+        t_pre_1 = time.time()
+        t_pre = round(t_pre_1 - t_pre_0, 2)
+        print(f'Reranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
 
-        #         score = self.match(target_feature_float32, candidate_feature_float32)
-        #         t3 = time.time()
-        #         image_id = Path(filename).stem
-
-        #         metadata = candidate_feature['metadata']
-
-        #         lat = metadata['latitude']
-        #         lon = metadata['longitude']
-        #         date = metadata['date']
-        #         elevation = metadata['elevation']
-                
-        #         data.append({
-        #             'matches': score,
-        #             'latitude': lat,
-        #             'longitude': lon,
-        #             'elevation': elevation,
-        #             'date': date,
-        #             'id': image_id,
-        #             'filename' : filename,
-        #         })
-        #         t4 = time.time()
-        #         t_load = round(t1 - t0, 6)
-        #         t_unquant = round(t2 - t1, 6)
-        #         t_match = round(t3 - t2, 6)
-        #         t_data = round(t4 - t3, 2)
-        #         loads.append(t_load)
-        #         unquants.append(t_unquant)
-        #         matches.append(t_match)
-        #         datas.append(t_data)
-
-        #         # if verbose:
-        #         #     print(f'load: {t_load}s | unquant: {t_unquant}s | match: {t_match}s | data: {t_data}s')
-
-        # avg_load = mean(loads)
-        # avg_unquant = mean(unquants)
-        # avg_match = mean(matches)
-        # avg_data = mean(datas)
+        avg_load = mean(loads)
+        avg_unquant = mean(unquants)
+        avg_match = mean(matches)
+        avg_data = mean(datas)
         
-        # if verbose:
-        #     print(f'Reranking - avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
+        if verbose:
+            print(f'Reranking times - avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
 
-        # return sorted(data, key=itemgetter('matches'), reverse=True)
         return ranked_candidates
