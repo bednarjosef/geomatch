@@ -1,3 +1,5 @@
+import time
+
 from PIL import Image
 
 from database import Database
@@ -28,17 +30,19 @@ class Geomatcher():
         return self.db.query_image(self.model, image, self.top_k, verbose=verbose)
     
     def get_ranked(self, image_filename, verbose=True, print_results=True):
+        t0 = time.time()
         top_k_options = self.get_top_k(image_filename, verbose=verbose)
         features_filenames = get_filenames_from_top_k(self.features_path, top_k_options)
 
         ranked = self.ranker.rank(image_filename, features_filenames, verbose=verbose)
+        t1 = time.time()
 
         if print_results:
-            self.print_results(top_k_options, ranked)
+            self.print_results(top_k_options, ranked, t1-t0)
 
         return top_k_options, ranked
     
-    def print_results(self, top_k_options, ranked):
+    def print_results(self, top_k_options, ranked, delta_t):
         print(f'Initial rankings:')
         for idx, result in enumerate(top_k_options):
             print(f'{idx + 1}.\t{result['filename']}\t{result['_distance']}')
@@ -46,3 +50,5 @@ class Geomatcher():
         print(f'Refined rankings:')
         for idx, item in enumerate(ranked):
             print(f'{idx + 1}.\t{item['id']}\t{item['matches']}\t{item['latitude']}, {item['longitude']}\t{item['elevation']}\t{item['date']}')
+
+        print(f'Inference took {round(delta_t, 2)}s.')
