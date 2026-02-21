@@ -23,6 +23,10 @@ def unquantize_and_cast(features):
     return f32_dict
 
 
+# to try for speedup:
+# instead of matcher try opencv + ransac
+# matcher batching
+
 class Ranker():
     def __init__(self, device='cuda', extractor_type='aliked'):
         self.device = device
@@ -71,6 +75,27 @@ class Ranker():
     def match(self, features0, features1):
         data = self.matcher( {'image0': features0, 'image1': features1} )
         return len(data['matches'][0])
+    
+    # GEMINI CODE
+    def fast_mnn_match(self, features0, features1):
+        desc0 = features0['descriptors'].squeeze()
+        desc1 = features1['descriptors'].squeeze()
+
+        # cosine similarity through dot product
+        sim = torch.matmul(desc0, desc1.t())
+
+        # best match in image 1 for every point in image 0
+        nn0_to_1 = torch.max(sim, dim=1)[1] 
+
+        # best match in image 0 for every point in image 1
+        nn1_to_0 = torch.max(sim, dim=0)[1] 
+
+        # does image 1's best match point back to image 0?
+        ids0 = torch.arange(desc0.shape[0], device=desc0.device)
+        mutual_matches = nn1_to_0[nn0_to_1] == ids0
+
+        # total count of mutual matches
+        return mutual_matches.sum().item()
 
     def rank(self, target_filename, candidate_features_filenames, verbose=True):
         if verbose:
@@ -88,9 +113,31 @@ class Ranker():
             target_feature = self.extract_features(target_tensor)
             target_feature_float32 = unquantize_and_cast(target_feature)
 
-            # candidate_features = [torch.load(fname, map_location=self.device) for fname in candidate_features_filenames]
+            print(f'Preranking feature matches using MNN Cascade...')
+            stage1_data = []
+            t_pre_0 = time.time()
 
+            # GEMINI: PRERANK WITH MNN MATCH
             for filename in candidate_features_filenames:
+                candidate_feature = torch.load(filename, map_location=self.device)
+                candidate_feature_float32 = unquantize_and_cast(candidate_feature)
+
+                mnn_score = self.fast_mnn_match(target_feature_float32, candidate_feature_float32)
+                
+                stage1_data.append({
+                    'mnn_score': mnn_score,
+                    'filename': filename,
+                    'candidate_feature_f32': candidate_feature_float32,
+                    'metadata': candidate_feature['metadata']
+                })
+
+            top_10_candidates = sorted(stage1_data, key=itemgetter('mnn_score'), reverse=True)[:10]
+            top_candidate_features_filenames = [d['filename'] for d in top_10_candidates]
+            t_pre_1 = time.time()
+            t_pre = round(t_pre_1 - t_pre_0, 2)
+            print(f'Preranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
+
+            for filename in top_candidate_features_filenames:
                 t0 = time.time()
                 candidate_feature = torch.load(filename, map_location=self.device)
                 t1 = time.time()
@@ -136,6 +183,6 @@ class Ranker():
         avg_data = mean(datas)
         
         if verbose:
-            print(f'avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
+            print(f'Reranking - avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
 
         return sorted(data, key=itemgetter('matches'), reverse=True)
