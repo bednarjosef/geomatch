@@ -56,13 +56,22 @@ class Database():
     def query_image(self, model, img, top_k, verbose=True):
         if verbose:
             print('Embedding query image...')
-            
+        
+        t0 = time.time()
         vector = model.process_batch([img])[0]
+        t1 = time.time()
 
         if verbose:
+            print(f'Image embedded in {round(t1-t0, 2)}s')
             print('Querying in database...')
 
+        t2 = time.time()
         results = self.table.search(vector.astype(np.float32)).distance_type('dot').limit(top_k).to_list()
+        t3 = time.time()
+
+        if verbose:
+            print(f'Vector query completed in {round(t3-t2, 2)}s')
+
         return results
 
 

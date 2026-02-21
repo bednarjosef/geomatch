@@ -126,7 +126,7 @@ class Ranker():
 
     def rank(self, target_filename, candidate_features_filenames, verbose=True):
         if verbose:
-            print(f'Ranking feature matches...')
+            print(f'Reranking initial results...')
 
         data = []
 
@@ -172,7 +172,7 @@ class Ranker():
             ranked_candidates = sorted(ranked_data, key=itemgetter('matches'), reverse=True)
             t_pre_1 = time.time()
             t_pre = round(t_pre_1 - t_pre_0, 2)
-            print(f'Preranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
+            print(f'Reranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
 
         #     for filename in top_candidate_features_filenames:
         #         t0 = time.time()

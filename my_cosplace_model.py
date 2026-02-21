@@ -30,7 +30,7 @@ class CosPlaceModel(nn.Module):
         return features
     
     def process_batch(self, images):
-        print(f'Embedding batch of {len(images)} images...')
+        # print(f'Embedding batch of {len(images)} images...')
         transformed = [self.transform(img.convert('RGB')) for img in images]
         batch = torch.stack(transformed).to(self.device)
 
