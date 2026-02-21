@@ -53,10 +53,15 @@ class Database():
         images = [Image.open(filename) for filename in filenames]
         self.embed_and_save_batch(model, images, filenames)
 
-    def query_image(self, model, img, top_k):
-        print('Embedding query image...')
+    def query_image(self, model, img, top_k, verbose=True):
+        if verbose:
+            print('Embedding query image...')
+            
         vector = model.process_batch([img])[0]
-        print('Querying...')
+
+        if verbose:
+            print('Querying in database...')
+
         results = self.table.search(vector.astype(np.float32)).distance_type('dot').limit(top_k).to_list()
         return results
 

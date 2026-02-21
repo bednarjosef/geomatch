@@ -26,6 +26,7 @@ def unquantize_and_cast(features):
 class Ranker():
     def __init__(self, device='cuda', extractor_type='aliked'):
         self.device = device
+        print(f'Initializing {extractor_type} Ranker on {device}...')
 
         if extractor_type == 'aliked':
             self.extractor = ALIKED(max_num_keypoints=1024, model_name='aliked-n16').eval()
@@ -71,8 +72,10 @@ class Ranker():
         data = self.matcher( {'image0': features0, 'image1': features1} )
         return len(data['matches'][0])
 
-    def rank(self, target_filename, candidate_features_filenames):
-        print(f'Ranking feature matches...')
+    def rank(self, target_filename, candidate_features_filenames, verbose=True):
+        if verbose:
+            print(f'Ranking feature matches...')
+
         data = []
 
         loads = []
@@ -123,12 +126,16 @@ class Ranker():
                 unquants.append(t_unquant)
                 matches.append(t_match)
                 datas.append(t_data)
-                print(f'load: {t_load}s | unquant: {t_unquant}s | match: {t_match}s | data: {t_data}s')
+
+                # if verbose:
+                #     print(f'load: {t_load}s | unquant: {t_unquant}s | match: {t_match}s | data: {t_data}s')
 
         avg_load = mean(loads)
         avg_unquant = mean(unquants)
         avg_match = mean(matches)
         avg_data = mean(datas)
-        print(f'avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
+        
+        if verbose:
+            print(f'avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
 
         return sorted(data, key=itemgetter('matches'), reverse=True)

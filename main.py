@@ -60,7 +60,7 @@ def main():
     FEATURES_PATH = '/mnt/storage-box-1/prague-streetview-50k-features-alikedn16-1024points-int8-2'
 
     dim = 2048
-    k = 100
+    k = 50
 
     model = CosPlaceModel(device=config.device, output_dim=dim)
     ranker = Ranker(config.device, extractor_type='aliked')

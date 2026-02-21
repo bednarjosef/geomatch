@@ -1,0 +1,48 @@
+from PIL import Image
+
+from database import Database
+from my_cosplace_model import CosPlaceModel
+from ranker import Ranker
+
+
+def get_prefix(id: str):
+    return id[:2]
+
+
+def get_filenames_from_top_k(features_path, top_k):
+    ids = [r['filename'] for r in top_k]
+    return [f'{features_path}/{get_prefix(fname)}/{fname}.pt' for fname in ids]
+
+
+class Geomatcher():
+    def __init__(self, local_features_path, hf_vector_db, vector_dim, top_k, device):
+        self.features_path = local_features_path
+        self.top_k = top_k
+
+        self.model = CosPlaceModel(device=device, output_dim=vector_dim)
+        self.ranker = Ranker(device, extractor_type='aliked')
+        self.db = Database.from_huggingface(hf_vector_db, vector_dim=vector_dim)
+
+    def get_top_k(self, image_filename, verbose=True):
+        image = Image.open(image_filename)
+        return self.db.query_image(self.model, image, self.top_k, verbose=verbose)
+    
+    def get_ranked(self, image_filename, verbose=True, print_results=True):
+        top_k_options = self.get_top_k(image_filename, verbose=verbose)
+        features_filenames = get_filenames_from_top_k(self.features_path, top_k_options)
+
+        ranked = self.ranker.rank(image_filename, features_filenames, verbose=verbose)
+
+        if print_results:
+            self.print_results(top_k_options, ranked)
+
+        return top_k_options, ranked
+    
+    def print_results(self, top_k_options, ranked):
+        print(f'Initial rankings:')
+        for idx, result in enumerate(top_k_options):
+            print(f'{idx + 1}.\t{result['filename']}\t{result['_distance']}')
+
+        print(f'Refined rankings:')
+        for idx, item in enumerate(ranked):
+            print(f'{idx + 1}.\t{item['id']}\t{item['matches']}\t{item['latitude']}, {item['longitude']}\t{item['elevation']}\t{item['date']}')
