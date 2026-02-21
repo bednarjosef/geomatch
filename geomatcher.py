@@ -1,7 +1,5 @@
 import time
 
-from PIL import Image
-
 from database import Database
 from my_cosplace_model import CosPlaceModel
 from ranker import Ranker

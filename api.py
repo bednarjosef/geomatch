@@ -3,6 +3,7 @@ import io
 from typing import List
 from PIL import Image
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from geomatcher import Geomatcher
 
@@ -40,6 +41,14 @@ async def lifespan(app: FastAPI):
     
 
 app = FastAPI(title="Geomatch", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health")
 async def health():

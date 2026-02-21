@@ -7,7 +7,6 @@ from operator import itemgetter
 from pathlib import Path
 
 from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
-from LightGlue.lightglue.utils import load_image
 
 
 # GEMINI CODE
