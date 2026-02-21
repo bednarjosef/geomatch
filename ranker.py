@@ -1,5 +1,6 @@
 import torch, time, cv2, concurrent.futures
 import numpy as np
+from torchvision.transforms import functional as F
 
 from statistics import mean
 from operator import itemgetter
@@ -25,10 +26,6 @@ def unquantize_and_cast(features):
     return f32_dict
 
 
-# to try for speedup:
-# instead of matcher try opencv + ransac
-# matcher batching
-
 class Ranker():
     def __init__(self, device='cuda', extractor_type='aliked'):
         self.device = device
@@ -44,9 +41,10 @@ class Ranker():
         self.extractor.to(device)
         self.matcher.to(device)
 
-    def preprocess_image(self, filename):
-        image = load_image(filename)
-        return image.to(self.device)
+    def preprocess_image(self, image):
+        image = image.convert('RGB')
+        image_tensor = F.to_tensor(image)
+        return image_tensor.to(self.device)
 
     # TODO: change to precision string ('float32', 'float16', 'int8')
     def extract_features(self, image_tensor, use_float16=True, quantize_int8=True):
@@ -147,7 +145,7 @@ class Ranker():
         print(f'File loading finished in {round(t_load_end - t_load_start, 2)}s')
         return loaded_candidates
 
-    def rank(self, target_filename, candidate_features_filenames, verbose=True):
+    def rank(self, target_image, candidate_features_filenames, verbose=True):
         if verbose:
             print(f'Reranking initial results...')
 
@@ -158,9 +156,12 @@ class Ranker():
 
         print(f'Preparing query image for reranking...')
         te0 = time.time()
-        target_tensor = self.preprocess_image(target_filename)
+        target_tensor = self.preprocess_image(target_image)
         te1 = time.time()
+
+        # bottleneck here: takes 3.5 seconds (same as vector query)
         target_feature = self.extract_features(target_tensor)
+
         te2 = time.time()
         target_feature_float32 = unquantize_and_cast(target_feature)
         te3 = time.time()
@@ -190,13 +191,12 @@ class Ranker():
             elevation = metadata['elevation']   
             
             ranked_data.append({
+                'id': image_id,
                 'matches': ransac_score,
                 'latitude': lat,
                 'longitude': lon,
                 'elevation': elevation,
                 'date': date,
-                'id': image_id,
-                'filename': filename,
             })
             t4 = time.time()
 

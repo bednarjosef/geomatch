@@ -1,3 +1,4 @@
+from PIL import Image
 import argparse, torch
 from geomatcher import Geomatcher
 
@@ -9,8 +10,9 @@ def inference_on_image(image_filename, topk):
     vector_dim = 2048
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    geomatcher = Geomatcher(FEATURES_PATH, HF_VECTOR_DB, vector_dim, topk, device)
-    initial, refined = geomatcher.get_ranked(image_filename, verbose=True, print_results=True)
+    geomatcher = Geomatcher(FEATURES_PATH, HF_VECTOR_DB, vector_dim, device)
+    image = Image.open(image_filename)
+    initial, refined = geomatcher.get_ranked(image, topk, verbose=True, print_results=True)
 
 
 if __name__ == '__main__':

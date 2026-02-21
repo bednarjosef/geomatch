@@ -17,24 +17,31 @@ def get_filenames_from_top_k(features_path, top_k):
 
 
 class Geomatcher():
-    def __init__(self, local_features_path, hf_vector_db, vector_dim, top_k, device):
+    def __init__(self, local_features_path, hf_vector_db, vector_dim, device):
         self.features_path = local_features_path
-        self.top_k = top_k
 
         self.model = CosPlaceModel(device=device, output_dim=vector_dim)
         self.ranker = Ranker(device, extractor_type='aliked')
         self.db = Database.from_huggingface(hf_vector_db, vector_dim=vector_dim)
 
-    def get_top_k(self, image_filename, verbose=True):
-        image = Image.open(image_filename)
-        return self.db.query_image(self.model, image, self.top_k, verbose=verbose)
+    def get_top_k(self, image, top_k, verbose=True):
+        return self.db.query_image(self.model, image, top_k, verbose=verbose)
     
-    def get_ranked(self, image_filename, verbose=True, print_results=True):
+    def get_ranked(self, image, top_k, verbose=True, print_results=True):
         t0 = time.time()
-        top_k_options = self.get_top_k(image_filename, verbose=verbose)
+        top_k_options = self.get_top_k(image, top_k, verbose=verbose)
         features_filenames = get_filenames_from_top_k(self.features_path, top_k_options)
 
-        ranked = self.ranker.rank(image_filename, features_filenames, verbose=verbose)
+        ranked = self.ranker.rank(image, features_filenames, verbose=verbose)
+
+        vector_distances = {item['filename']: item['_distance'] for item in top_k_options}
+        initial_ranks = {item['filename']: idx + 1 for idx, item in enumerate(top_k_options)}
+        refined_ranks = {item['id']: idx + 1 for idx, item in enumerate(ranked)}
+        for item in ranked:
+            item['vector_distance'] = vector_distances.get(item['id'])
+            item['initial_rank'] = initial_ranks.get(item['id'])
+            item['refined_rank'] = refined_ranks.get(item['id'])
+
         t1 = time.time()
 
         if print_results:
