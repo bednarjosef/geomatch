@@ -1,4 +1,6 @@
-import torch, time
+import torch, time, cv2
+import numpy as np
+
 from statistics import mean
 from operator import itemgetter
 from pathlib import Path
@@ -97,6 +99,31 @@ class Ranker():
         # total count of mutual matches
         return mutual_matches.sum().item()
 
+    def ransac_match(self, target_feature, candidate_feature):
+        desc1 = target_feature['descriptors'].squeeze().numpy()
+        desc2 = candidate_feature['descriptors'].squeeze().numpy()
+        
+        kp1 = target_feature['keypoints'].squeeze().numpy()
+        kp2 = candidate_feature['keypoints'].squeeze().numpy()
+
+        # Fast Brute-Force Matcher
+        matcher = cv2.BFMatcher(cv2.NORM_L2, crossCheck=True)
+        raw_matches = matcher.match(desc1, desc2)
+
+        if len(raw_matches) < 4:
+            return 0
+
+        pts1 = np.float32([kp1[m.queryIdx] for m in raw_matches])
+        pts2 = np.float32([kp2[m.trainIdx] for m in raw_matches])
+
+        matrix, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 3.0, 0.99)
+
+        if mask is None:
+            return 0
+
+        inliers = int(np.sum(mask))
+        return inliers
+
     def rank(self, target_filename, candidate_features_filenames, verbose=True):
         if verbose:
             print(f'Ranking feature matches...')
@@ -122,16 +149,16 @@ class Ranker():
                 candidate_feature = torch.load(filename, map_location=self.device)
                 candidate_feature_float32 = unquantize_and_cast(candidate_feature)
 
-                mnn_score = self.fast_mnn_match(target_feature_float32, candidate_feature_float32)
+                ransac_score = self.ransac_match(target_feature_float32, candidate_feature_float32)
                 
                 stage1_data.append({
-                    'mnn_score': mnn_score,
+                    'ransac_score': ransac_score,
                     'filename': filename,
                     'candidate_feature_f32': candidate_feature_float32,
                     'metadata': candidate_feature['metadata']
                 })
 
-            top_10_candidates = sorted(stage1_data, key=itemgetter('mnn_score'), reverse=True)[:10]
+            top_10_candidates = sorted(stage1_data, key=itemgetter('ransac_score'), reverse=True)[:10]
             top_candidate_features_filenames = [d['filename'] for d in top_10_candidates]
             t_pre_1 = time.time()
             t_pre = round(t_pre_1 - t_pre_0, 2)
