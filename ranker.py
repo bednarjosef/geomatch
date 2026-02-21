@@ -140,8 +140,8 @@ class Ranker():
             target_feature = self.extract_features(target_tensor)
             target_feature_float32 = unquantize_and_cast(target_feature)
 
-            print(f'Preranking feature matches using MNN Cascade...')
-            stage1_data = []
+            # print(f'Preranking feature matches using MNN Cascade...')
+            ranked_data = []
             t_pre_0 = time.time()
 
             # GEMINI: PRERANK WITH MNN MATCH
@@ -150,66 +150,77 @@ class Ranker():
                 candidate_feature_float32 = unquantize_and_cast(candidate_feature)
 
                 ransac_score = self.ransac_match(target_feature_float32, candidate_feature_float32)
-                
-                stage1_data.append({
-                    'ransac_score': ransac_score,
-                    'filename': filename,
-                    'candidate_feature_f32': candidate_feature_float32,
-                    'metadata': candidate_feature['metadata']
-                })
 
-            top_10_candidates = sorted(stage1_data, key=itemgetter('ransac_score'), reverse=True)[:10]
-            top_candidate_features_filenames = [d['filename'] for d in top_10_candidates]
-            t_pre_1 = time.time()
-            t_pre = round(t_pre_1 - t_pre_0, 2)
-            print(f'Preranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
-
-            for filename in top_candidate_features_filenames:
-                t0 = time.time()
-                candidate_feature = torch.load(filename, map_location=self.device)
-                t1 = time.time()
-                candidate_feature_float32 = unquantize_and_cast(candidate_feature)
-                t2 = time.time()
-
-                score = self.match(target_feature_float32, candidate_feature_float32)
-                t3 = time.time()
                 image_id = Path(filename).stem
-
                 metadata = candidate_feature['metadata']
 
                 lat = metadata['latitude']
                 lon = metadata['longitude']
                 date = metadata['date']
-                elevation = metadata['elevation']
+                elevation = metadata['elevation']   
                 
-                data.append({
-                    'matches': score,
+                ranked_data.append({
+                    'matches': ransac_score,
                     'latitude': lat,
                     'longitude': lon,
                     'elevation': elevation,
                     'date': date,
                     'id': image_id,
-                    'filename' : filename,
+                    'filename': filename,
                 })
-                t4 = time.time()
-                t_load = round(t1 - t0, 6)
-                t_unquant = round(t2 - t1, 6)
-                t_match = round(t3 - t2, 6)
-                t_data = round(t4 - t3, 2)
-                loads.append(t_load)
-                unquants.append(t_unquant)
-                matches.append(t_match)
-                datas.append(t_data)
 
-                # if verbose:
-                #     print(f'load: {t_load}s | unquant: {t_unquant}s | match: {t_match}s | data: {t_data}s')
+            ranked_candidates = sorted(ranked_data, key=itemgetter('matches'), reverse=True)
+            t_pre_1 = time.time()
+            t_pre = round(t_pre_1 - t_pre_0, 2)
+            print(f'Preranking finished in {t_pre}s, {round(t_pre / len(candidate_features_filenames), 4)} avg')
 
-        avg_load = mean(loads)
-        avg_unquant = mean(unquants)
-        avg_match = mean(matches)
-        avg_data = mean(datas)
+        #     for filename in top_candidate_features_filenames:
+        #         t0 = time.time()
+        #         candidate_feature = torch.load(filename, map_location=self.device)
+        #         t1 = time.time()
+        #         candidate_feature_float32 = unquantize_and_cast(candidate_feature)
+        #         t2 = time.time()
+
+        #         score = self.match(target_feature_float32, candidate_feature_float32)
+        #         t3 = time.time()
+        #         image_id = Path(filename).stem
+
+        #         metadata = candidate_feature['metadata']
+
+        #         lat = metadata['latitude']
+        #         lon = metadata['longitude']
+        #         date = metadata['date']
+        #         elevation = metadata['elevation']
+                
+        #         data.append({
+        #             'matches': score,
+        #             'latitude': lat,
+        #             'longitude': lon,
+        #             'elevation': elevation,
+        #             'date': date,
+        #             'id': image_id,
+        #             'filename' : filename,
+        #         })
+        #         t4 = time.time()
+        #         t_load = round(t1 - t0, 6)
+        #         t_unquant = round(t2 - t1, 6)
+        #         t_match = round(t3 - t2, 6)
+        #         t_data = round(t4 - t3, 2)
+        #         loads.append(t_load)
+        #         unquants.append(t_unquant)
+        #         matches.append(t_match)
+        #         datas.append(t_data)
+
+        #         # if verbose:
+        #         #     print(f'load: {t_load}s | unquant: {t_unquant}s | match: {t_match}s | data: {t_data}s')
+
+        # avg_load = mean(loads)
+        # avg_unquant = mean(unquants)
+        # avg_match = mean(matches)
+        # avg_data = mean(datas)
         
-        if verbose:
-            print(f'Reranking - avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
+        # if verbose:
+        #     print(f'Reranking - avg_load: {avg_load}s | avg_unquant: {avg_unquant}s | avg_match: {avg_match}s | avg_data: {avg_data}s')
 
-        return sorted(data, key=itemgetter('matches'), reverse=True)
+        # return sorted(data, key=itemgetter('matches'), reverse=True)
+        return ranked_candidates
