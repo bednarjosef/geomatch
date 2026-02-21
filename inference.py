@@ -21,6 +21,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    print(f'Running inference on {args.image_path} with top_k {args.topk}.')
+    print(f'Running inference on {args.image_path} with top_k={args.topk}.')
 
     inference_on_image(args.image_path, args.topk)
