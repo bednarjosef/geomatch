@@ -1,4 +1,4 @@
-import torch, time, cv2
+import torch, time, cv2, concurrent.futures
 import numpy as np
 
 from statistics import mean
@@ -124,6 +124,29 @@ class Ranker():
         inliers = int(np.sum(mask))
         return inliers
 
+    # GEMINI
+    def fetch_features(self, filenames):
+        print(f'Fetching {len(filenames)} candidate files concurrently...')
+        
+        def load_file(filename):
+            data = torch.load(filename, map_location=self.device)
+            return filename, data
+
+        loaded_candidates = {}
+
+        t_load_start = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+            futures = {executor.submit(load_file, fname): fname for fname in filenames}
+            
+            for future in concurrent.futures.as_completed(futures):
+                filename, data = future.result()
+                if data is not None:
+                    loaded_candidates[filename] = data
+                    
+        t_load_end = time.time()
+        print(f'File loading finished in {round(t_load_end - t_load_start, 2)}s')
+        return loaded_candidates
+
     def rank(self, target_filename, candidate_features_filenames, verbose=True):
         if verbose:
             print(f'Reranking initial results...')
@@ -143,12 +166,14 @@ class Ranker():
         te3 = time.time()
         print(f'Query image preprocessed in {round(te1-te0, 2)}s, features extracted in {round(te2-te1, 2)}s, unquantized in {round(te3-te2, 2)}s')
 
+        loaded_candidates = self.fetch_features(candidate_features_filenames)
+
         ranked_data = []
         t_pre_0 = time.time()
 
         for filename in candidate_features_filenames:
             t0 = time.time()
-            candidate_feature = torch.load(filename, map_location=self.device)
+            candidate_feature = loaded_candidates.get(filename)
             t1 = time.time()
             candidate_feature_float32 = unquantize_and_cast(candidate_feature)
             t2 = time.time()
