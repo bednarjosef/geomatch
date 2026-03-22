@@ -1,15 +1,14 @@
 import torch, time, cv2, concurrent.futures
 import numpy as np
-from torchvision.transforms import functional as F
 
 from statistics import mean
 from operator import itemgetter
 from pathlib import Path
+from torchvision.transforms import functional as F
 
 from LightGlue.lightglue import LightGlue, SuperPoint, ALIKED
 
 
-# GEMINI CODE
 def unquantize_and_cast(features):
     f32_dict = {}
     for k, v in features.items():
@@ -55,8 +54,6 @@ class Ranker():
         optimized_feature = {}
         for k, v in image_feature.items():
             if isinstance(v, torch.Tensor):
-                
-                # GEMINI CODE
                 if quantize_int8 and k == 'descriptors':
                     v_scaled = (v * 127.0).clamp(-128, 127).round().to(torch.int8)
                     optimized_feature[k] = v_scaled
@@ -75,7 +72,6 @@ class Ranker():
         data = self.matcher( {'image0': features0, 'image1': features1} )
         return len(data['matches'][0])
     
-    # GEMINI CODE
     def fast_mnn_match(self, features0, features1):
         desc0 = features0['descriptors'].squeeze()
         desc1 = features1['descriptors'].squeeze()
@@ -113,7 +109,7 @@ class Ranker():
         pts1 = np.float32([kp1[m.queryIdx] for m in raw_matches])
         pts2 = np.float32([kp2[m.trainIdx] for m in raw_matches])
 
-        matrix, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 3.0, 0.99)
+        _matrix, mask = cv2.findFundamentalMat(pts1, pts2, cv2.FM_RANSAC, 3.0, 0.99)
 
         if mask is None:
             return 0
@@ -121,7 +117,6 @@ class Ranker():
         inliers = int(np.sum(mask))
         return inliers
 
-    # GEMINI
     def fetch_features(self, filenames):
         print(f'Fetching {len(filenames)} candidate files concurrently...')
         

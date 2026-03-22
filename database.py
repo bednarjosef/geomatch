@@ -23,7 +23,6 @@ class Database():
 
     @classmethod
     def from_huggingface(cls, hf_repo, vector_dim: int = 2048):
-        # path = snapshot_download(hf_repo, repo_type='dataset')
         uri = f'hf://datasets/{hf_repo}'
         return cls(vector_dim, uri)
 

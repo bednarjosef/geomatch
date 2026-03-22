@@ -2,10 +2,10 @@ import time
 import torch
 
 from LightGlue.lightglue.utils import load_image
-from PIL import Image
 
 from operator import itemgetter
 
+# this ranker is lower performing compared to ranker.py, however it is fast (ideal for local inference on mobile)
 
 class XFeatRanker():
     def __init__(self, device='cuda'):

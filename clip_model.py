@@ -2,7 +2,6 @@ import torch, open_clip
 import torch.nn as nn
 import numpy as np
 
-
 class CLIPModel(nn.Module):
     def __init__(self, device='cuda'):
         print(f'Loading CLIP model...')

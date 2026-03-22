@@ -4,7 +4,6 @@ import numpy as np
 
 from torchvision import transforms
 
-
 class CosPlaceModel(nn.Module):
     def __init__(self, device='cuda', backbone='ResNet50', output_dim=2048):
         print(f'Loading CosPlace model...')

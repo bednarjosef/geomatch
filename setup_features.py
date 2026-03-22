@@ -1,10 +1,10 @@
-from dataclasses import dataclass
-
 import os, torch
+
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 from tqdm import tqdm
+from dataclasses import dataclass
 
 from ranker import Ranker
 
@@ -36,6 +36,7 @@ def to_cpu(image_feature):
             cpu_feature[k] = v
     return cpu_feature
 
+# save into subdirectories by first 2 characters of image id for fast inference access in production
 def save_feature(dir_path, image_id, image_feature):
     prefix = image_id[:2]
     directory = os.path.join(dir_path, prefix)
@@ -43,6 +44,7 @@ def save_feature(dir_path, image_id, image_feature):
     path = os.path.join(directory, f'{image_id}.pt')
     torch.save(image_feature, path)
 
+# TODO: should upload this to HF too
 def main():
     HF_IMG_DATASET = 'josefbednar/prague-streetview-50k'
     FEATURES_PATH = './prague-streetview-50k-features-alikedn16-1024points-int8'
@@ -59,7 +61,6 @@ def main():
 
     print(f'Starting processing with {PRECISION} precision...')
     for batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevations in tqdm(dataloader, desc='Processing Batches'):
-
         for image, image_id, date, lat, lon, elevation in zip(batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevations):
             image_tensor = image.unsqueeze(0).to(config.device)
             image_feature = ranker.extract_features(image_tensor, use_float16=True, quantize_int8=True)

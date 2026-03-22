@@ -1,5 +1,6 @@
-from PIL import Image
 import argparse, torch
+
+from PIL import Image
 from geomatcher import Geomatcher
 
 
@@ -18,11 +19,10 @@ def inference_on_image(image_filename, topk):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='GeoMatch', description='Find exact location of a streetview image.')
 
-    parser.add_argument('image_path', help='Path to the input image (e.g., image.png)')
+    parser.add_argument('image_path', help='Path to the input image (e.g. image.png)')
     parser.add_argument('-k', '--topk', type=int, default=50, help='Number of initial top_k results to use.')
 
     args = parser.parse_args()
 
     print(f'Running inference on {args.image_path} with top_k={args.topk}.')
-
     inference_on_image(args.image_path, args.topk)

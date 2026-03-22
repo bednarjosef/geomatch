@@ -1,13 +1,15 @@
+import io, torch, uvicorn
+
 from contextlib import asynccontextmanager
-import io
+from pydantic import BaseModel
 from typing import List
+
 from PIL import Image
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+
 from geomatcher import Geomatcher
 
-import torch, uvicorn
 
 class GeomatchResult(BaseModel):
     id: str
@@ -32,33 +34,33 @@ async def lifespan(app: FastAPI):
     vector_dim = 2048
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    print("Initializing Geomatcher...")
+    print('Initializing Geomatcher...')
     geomatcher = Geomatcher(FEATURES_PATH, HF_VECTOR_DB, vector_dim, device)
 
     app.state.geomatcher = geomatcher
-    print("Ready for production.")
+    print('Ready for production.')
     yield
     
 
-app = FastAPI(title="Geomatch", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title='Geomatch', version='1.0.0', lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=['*'],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
-@app.get("/health")
+@app.get('/health')
 async def health():
-    return {"status": "geomatch ok"}
+    return {'status': 'geomatch ok'}
 
 @app.post('/query')
 async def query(request: Request, image_file: UploadFile = File(...), top_k: int = 50):
     print(f'Received a query request.')
     if not image_file:
-        raise HTTPException(status_code=400, detail='"image_file" must not be empty.')
+        raise HTTPException(status_code=400, detail='image_file must not be empty.')
     
     image_bytes = await image_file.read()
     image = Image.open(io.BytesIO(image_bytes))
@@ -70,8 +72,8 @@ async def query(request: Request, image_file: UploadFile = File(...), top_k: int
             results=refined
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Geomatching failed: {e}")
+        raise HTTPException(status_code=500, detail=f'Geomatching failed: {e}')
 
-if __name__ == "__main__":
-    print("Starting Geomatch API server...")
-    uvicorn.run(app, host="0.0.0.0", port=1717)
+if __name__ == '__main__':
+    print('Starting Geomatch API server...')
+    uvicorn.run(app, host='0.0.0.0', port=1717)

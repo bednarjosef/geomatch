@@ -1,125 +1,53 @@
-import os
-import time
-from dataclasses import dataclass
-
 import torch
-from torchvision import transforms
-from torch.utils.data import DataLoader
-from datasets import load_dataset
-from tqdm import tqdm
 
+from dataclasses import dataclass
+from PIL import Image
+
+from my_cosplace_model import CosPlaceModel
 from ranker import Ranker
+from database import Database
 
-import torch.multiprocessing as mp
-mp.set_sharing_strategy('file_system')
 
 @dataclass
 class config:
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-# Define transform
-to_tensor = transforms.ToTensor()
 
-def collate_fn(batch):
-    # Stack the PIL images into a batch tensor on the CPU
-    images = torch.stack([to_tensor(item['image']) for item in batch])
-    ids = [item['image_id'] for item in batch]
-    
-    # Extract the new metadata fields
-    dates = [item['date'] for item in batch]
-    lats = [item['latitude'] for item in batch]
-    lons = [item['longitude'] for item in batch]
-    elevs = [item['elevation'] for item in batch]
-    
-    return images, ids, dates, lats, lons, elevs
+def get_prefix(id: str):
+    return id[:2]
 
-def get_dir_size(path='.'):
-    total = 0
-    with os.scandir(path) as it:
-        for entry in it:
-            if entry.is_file():
-                total += entry.stat().st_size
-            elif entry.is_dir():
-                total += get_dir_size(entry.path)
-    return total
+
+def get_filenames_from_top_k(features_path, top_k):
+    ids = [r['filename'] for r in top_k]
+    return [f'{features_path}/{get_prefix(fname)}/{fname}.pt' for fname in ids]
+
 
 def main():
-    HF_IMG_DATASET = 'josefbednar/prague-streetview-50k'
-    BATCH_SIZE = 16
-    NUM_TEST_BATCHES = 200
-    FEATURES_PATH = './test_extracted_features'
+    FEATURES_PATH = '/mnt/storage-box-1/prague-streetview-50k-features-alikedn16-1024points-int8-2'
 
-    ranker = Ranker(config.device)
+    dim = 2048
+    k = 50
+
+    model = CosPlaceModel(device=config.device, output_dim=dim)
+    ranker = Ranker(config.device, extractor_type='aliked')
+    db = Database.from_huggingface('josefbednar/prague-streetview-50k-vectors', vector_dim=dim)
+
+    target_img_filename = 'imga.png'  # INPUT A TEST IMAGE FILENAME
+    target_img = Image.open(target_img_filename)
     
-    print(f'Downloading/Loading dataset ({HF_IMG_DATASET})...')
-    dataset = load_dataset(HF_IMG_DATASET, split='train')
-    print(f'Download complete.')
-
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=12, collate_fn=collate_fn)
-
-    print(f'Starting processing...')
-    start_time = time.time()
+    top_k = db.query_image(model, target_img, top_k=k)
     
-    with torch.no_grad():
-        # Unpack all 6 variables from the updated collate_fn
-        for i, (batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevs) in enumerate(tqdm(dataloader, desc='Processing Batches', total=NUM_TEST_BATCHES)):
-            if i >= NUM_TEST_BATCHES:
-                break
-            
-            # Zip them together for the inner loop
-            for single_img, image_id, date, lat, lon, elev in zip(batch_images, batch_ids, batch_dates, batch_lats, batch_lons, batch_elevs):
-                img_tensor = single_img.unsqueeze(0).to(config.device)
-                image_feature = ranker.extract_features(img_tensor)
+    features_filenames = get_filenames_from_top_k(FEATURES_PATH, top_k)
+    ranked = ranker.rank(target_img_filename, features_filenames)
 
-                optimized_feature = {}
+    print(f'Initial rankings:')
+    for idx, result in enumerate(top_k):
+        print(f'{idx + 1}.\t{result['filename']}\t{result['_distance']}')
 
-                # INT8 Quantization Logic
-                for k, v in image_feature.items():
-                    if isinstance(v, torch.Tensor):
-                        if k == 'descriptors':
-                            v_scaled = (v * 127.0).clamp(-128, 127).round().to(torch.int8)
-                            optimized_feature[k] = v_scaled.cpu()
-                            
-                        elif v.dtype == torch.float32:
-                            # Cast to float16 on the GPU, THEN move to CPU
-                            optimized_feature[k] = v.half().cpu()
-                        
-                        else:
-                            optimized_feature[k] = v.cpu()
-                    else:
-                        optimized_feature[k] = v
+    print(f'Refined rankings:')
+    for idx, item in enumerate(ranked):
+        print(f'{idx + 1}.\t{item['id']}\t{item['matches']}\t{item['latitude']}, {item['longitude']}\t{item['elevation']}\t{item['date']}')
 
-                # Inject the metadata dictionary before saving
-                optimized_feature['metadata'] = {
-                    'date': date,
-                    'latitude': lat,
-                    'longitude': lon,
-                    'elevation': elev
-                }
-
-                prefix = image_id[:2]
-                directory = os.path.join(FEATURES_PATH, prefix)
-                os.makedirs(directory, exist_ok=True)
-                path = os.path.join(directory, f'{image_id}.pt')
-
-                torch.save(optimized_feature, path)
-
-    end_time = time.time()
-    
-    # --- Analytics ---
-    elapsed_time = end_time - start_time
-    num_processed_images = NUM_TEST_BATCHES * BATCH_SIZE
-    total_images_in_dataset = len(dataset)
-    size_bytes = get_dir_size(FEATURES_PATH)
-    size_mb = size_bytes / (1024 * 1024)
-    estimated_total_gb = ((size_mb / num_processed_images) * total_images_in_dataset) / 1024
-    estimated_total_hours = (elapsed_time / num_processed_images) * total_images_in_dataset / 3600
-    
-    print(f'\nTEST RESULTS:')
-    print(f'Images Processed: {num_processed_images}')
-    print(f'Time:             {elapsed_time:.2f}s ({num_processed_images / elapsed_time:.2f} img/sec)')
-    print(f'Avg File Size:    {(size_mb * 1024) / num_processed_images:.2f} KB/file')
-    print(f'ESTIMATED FULL RUN: ~{estimated_total_hours:.2f} hours, ~{estimated_total_gb:.2f} GB\n')
 
 if __name__ == '__main__':
     main()

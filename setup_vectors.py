@@ -1,15 +1,14 @@
-from dataclasses import dataclass
-
 import torch
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 from huggingface_hub import HfApi
 from tqdm import tqdm
+from dataclasses import dataclass
 
 from database import Database
 from my_cosplace_model import CosPlaceModel
-from xfeat_ranker import XFeatRanker
 
+# THIS SCRIPT CREATES AND SAVES A VECTOR DATABASE (embedding using the CosPlace model)
 
 @dataclass
 class config:
@@ -29,7 +28,6 @@ def main():
     dim = 2048
 
     model = CosPlaceModel(device=config.device, output_dim=dim)
-    ranker = XFeatRanker(config.device)
     db = Database(vector_dim=dim, path=DB_PATH)
     
     print(f'Downloading full dataset ({HF_IMG_DATASET})...')

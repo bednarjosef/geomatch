@@ -4,10 +4,8 @@ from database import Database
 from my_cosplace_model import CosPlaceModel
 from ranker import Ranker
 
-
 def get_prefix(id: str):
     return id[:2]
-
 
 def get_filenames_from_top_k(features_path, top_k):
     ids = [r['filename'] for r in top_k]
